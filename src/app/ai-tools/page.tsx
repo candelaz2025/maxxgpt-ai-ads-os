@@ -16,9 +16,9 @@ import {
   ArrowRight,
   ShieldAlert,
   Sliders,
-  DollarSign
+  DollarSign,
+  AlertCircle
 } from 'lucide-react';
-import { MOCK_INTERESTS } from '@/data/mockData';
 import { InterestResult } from '@/types';
 import { useMetaAuth } from '@/context/MetaAuthContext';
 import { useToast } from '@/components/ui/Toast';
@@ -30,9 +30,10 @@ export default function AssistantHubPage() {
 
   // ================= Interest Finder State =================
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [interestResults, setInterestResults] = useState<InterestResult[]>(MOCK_INTERESTS);
+  const [interestResults, setInterestResults] = useState<InterestResult[]>([]);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // ================= Ad Launcher State =================
   const [campaignName, setCampaignName] = useState('แคมเปญยอดขาย - บูสต์ผิวกลาสสกิน 2026');
@@ -53,19 +54,24 @@ export default function AssistantHubPage() {
   // Search interest action
   const handleSearchInterests = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!searchKeyword.trim()) return;
     setIsSearching(true);
+    setSearchError(null);
     fetch(`/api/v2/interest-search?q=${encodeURIComponent(searchKeyword)}`)
       .then(res => res.json())
       .then(res => {
-        if (res.data) setInterestResults(res.data);
-        showToast(`Agent A03 พบ ${res.data?.length || 0} Interests ที่มีอยู่จริงบน Meta`, 'info');
+        if (res.success && res.data) {
+          setInterestResults(res.data);
+          showToast(`Agent A03 พบ ${res.data.length} Interests จาก Meta Graph API v21.0`, 'success');
+        } else {
+          setSearchError(res.message || 'ไม่สามารถค้นหาได้');
+          showToast(res.message || 'ไม่พบ Interest หรือยังไม่ได้ใส่ Token', 'error');
+          setInterestResults([]);
+        }
       })
-      .catch(() => {
-        const filtered = MOCK_INTERESTS.filter(i => 
-          i.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-          i.topic.toLowerCase().includes(searchKeyword.toLowerCase())
-        );
-        setInterestResults(filtered.length > 0 ? filtered : MOCK_INTERESTS);
+      .catch((err) => {
+        setSearchError(err.message || 'การเชื่อมต่อ Meta API ขัดข้อง');
+        setInterestResults([]);
       })
       .finally(() => setIsSearching(false));
   };
@@ -329,6 +335,32 @@ ${productName} ไอเทมลับที่บล็อกเกอร์�
                     </td>
                   </tr>
                 ))}
+
+                {interestResults.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center">
+                      <div className="max-w-md mx-auto space-y-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
+                          <Search className="w-5 h-5" />
+                        </div>
+                        <div className="text-sm font-bold text-white">
+                          {searchError ? 'เกิดข้อผิดพลาดในการดึงข้อมูล' : 'ยังไม่มีผลลัพธ์ Interest'}
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          {searchError || 'กรอกคำค้นหากลุ่มเป้าหมายที่ต้องการค้นหา (เช่น skincare, supplement, food) แล้วกดปุ่มเพื่อดึงข้อมูลจริงจาก Meta Graph API'}
+                        </p>
+                        {searchError?.includes('Token') && (
+                          <button
+                            onClick={() => setShowConnectModal(true)}
+                            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold inline-flex items-center space-x-1.5 transition-colors cursor-pointer"
+                          >
+                            <span>เชื่อมต่อ Facebook Access Token</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

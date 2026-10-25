@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { MOCK_AD_ACCOUNTS } from '@/data/mockData';
+import { supabaseService } from '@/lib/supabase/service';
 
 export async function GET() {
+  const account = await supabaseService.getMetaAccount();
   return NextResponse.json({
-    data: MOCK_AD_ACCOUNTS,
-    count: MOCK_AD_ACCOUNTS.length
+    success: true,
+    data: account ? [account] : []
   });
 }

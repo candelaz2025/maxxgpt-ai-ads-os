@@ -218,6 +218,14 @@ export default function MessageTierListPage() {
                   </td>
                 </tr>
               ))}
+
+              {filteredLeads.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                    ยังไม่มีข้อความ Inbox หรือ Leads ในหมวดนี้ (เชื่อมต่อ Facebook Page ที่ /connect-meta เพื่อซิงค์ข้อความจริง)
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

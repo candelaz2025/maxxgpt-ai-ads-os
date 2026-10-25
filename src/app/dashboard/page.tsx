@@ -65,6 +65,29 @@ export default function DashboardPage() {
     fetchCampaigns();
   }, []);
 
+  // Sync from Meta Graph API
+  const handleSyncFromMeta = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch('/api/v2/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync_from_meta' })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setCampaigns(data.data);
+        showToast(data.message || `ซิงค์สำเร็จ! ดึง ${data.data.length} แคมเปญจาก Meta API`, 'success');
+      } else {
+        showToast(data.error || 'ไม่สามารถซิงค์ได้ กรุณาเชื่อมต่อ Facebook Token ที่ /connect-meta', 'error');
+      }
+    } catch {
+      showToast('การเชื่อมต่อกับ Meta Graph API ขัดข้อง', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Toggle active/pause status
   const handleToggleStatus = async (id: string) => {
     try {
@@ -205,6 +228,16 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={handleSyncFromMeta}
+            disabled={isRefreshing}
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center space-x-1.5 transition-all shadow-md cursor-pointer disabled:opacity-50"
+            title="ดึงข้อมูลแคมเปญจริงจาก Meta Graph API v21.0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>ซิงค์จาก Meta (v21.0)</span>
+          </button>
+
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-4 py-2 rounded-xl bg-gold-500 hover:bg-gold-400 text-black font-bold text-xs flex items-center space-x-1.5 transition-all shadow-md cursor-pointer"
@@ -459,6 +492,45 @@ export default function DashboardPage() {
                   </td>
                 </tr>
               ))}
+
+              {filteredCampaigns.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="py-12 text-center">
+                    <div className="max-w-md mx-auto space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-[#1877F2]/20 text-[#1877F2] flex items-center justify-center mx-auto">
+                        <AlertTriangle className="w-6 h-6 text-gold-400" />
+                      </div>
+                      <div className="text-sm font-bold text-white">
+                        {campaigns.length === 0 ? 'ยังไม่พบข้อมูลแคมเปญ Meta Ads' : 'ไม่พบแคมเปญที่ตรงกับคำค้นหา'}
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        {campaigns.length === 0 
+                          ? 'คุณสามารถกดเชื่อมต่อ Facebook Page / Meta Token เพื่อซิงค์แคมเปญจริง หรือสร้างแคมเปญใหม่ได้ทันที'
+                          : 'ลองปรับเปลี่ยนตัวกรองสถานะ หรือล้างคำค้นหาเพื่อดูแคมเปญทั้งหมด'}
+                      </p>
+                      {campaigns.length === 0 && (
+                        <div className="flex items-center justify-center space-x-3 pt-2">
+                          <button
+                            onClick={handleSyncFromMeta}
+                            disabled={isRefreshing}
+                            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs inline-flex items-center space-x-1.5 transition-all cursor-pointer"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            <span>ซิงค์จาก Meta</span>
+                          </button>
+                          <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="px-4 py-2 rounded-xl bg-gold-500 hover:bg-gold-400 text-black font-bold text-xs inline-flex items-center space-x-1.5 transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>สร้างแคมเปญแรก</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

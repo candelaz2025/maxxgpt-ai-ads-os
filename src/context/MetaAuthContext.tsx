@@ -1,8 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { FacebookUser, FacebookPage, AdAccount, ConnectedMetaAccount } from '@/types';
-import { MOCK_FACEBOOK_USER, MOCK_FACEBOOK_PAGES, MOCK_AD_ACCOUNTS } from '@/data/mockData';
+import { FacebookUser, FacebookPage, AdAccount } from '@/types';
 import { useToast } from '@/components/ui/Toast';
 
 interface MetaAuthContextType {
@@ -17,35 +16,37 @@ interface MetaAuthContextType {
   setShowConnectModal: (show: boolean) => void;
   selectPage: (pageId: string) => Promise<void>;
   selectAdAccount: (adAccountId: string) => Promise<void>;
-  connectFacebook: () => Promise<void>;
+  connectFacebook: (customToken?: string) => Promise<boolean>;
   disconnectFacebook: () => Promise<void>;
+  refreshMetaAuth: () => Promise<void>;
 }
 
 const MetaAuthContext = createContext<MetaAuthContextType>({
-  isConnected: true,
-  user: MOCK_FACEBOOK_USER,
-  pages: MOCK_FACEBOOK_PAGES,
-  activePage: MOCK_FACEBOOK_PAGES[0],
-  adAccounts: MOCK_AD_ACCOUNTS,
-  activeAdAccount: MOCK_AD_ACCOUNTS[0],
+  isConnected: false,
+  user: null,
+  pages: [],
+  activePage: null,
+  adAccounts: [],
+  activeAdAccount: null,
   isConnecting: false,
   showConnectModal: false,
   setShowConnectModal: () => {},
   selectPage: async () => {},
   selectAdAccount: async () => {},
-  connectFacebook: async () => {},
-  disconnectFacebook: async () => {}
+  connectFacebook: async () => false,
+  disconnectFacebook: async () => {},
+  refreshMetaAuth: async () => {}
 });
 
 export const useMetaAuth = () => useContext(MetaAuthContext);
 
 export const MetaAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isConnected, setIsConnected] = useState<boolean>(true);
-  const [user, setUser] = useState<FacebookUser | null>(MOCK_FACEBOOK_USER);
-  const [pages, setPages] = useState<FacebookPage[]>(MOCK_FACEBOOK_PAGES);
-  const [activePageId, setActivePageId] = useState<string>(MOCK_FACEBOOK_PAGES[0].id);
-  const [adAccounts, setAdAccounts] = useState<AdAccount[]>(MOCK_AD_ACCOUNTS);
-  const [activeAdAccountId, setActiveAdAccountId] = useState<string>(MOCK_AD_ACCOUNTS[0].id);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [user, setUser] = useState<FacebookUser | null>(null);
+  const [pages, setPages] = useState<FacebookPage[]>([]);
+  const [activePageId, setActivePageId] = useState<string>('');
+  const [adAccounts, setAdAccounts] = useState<AdAccount[]>([]);
+  const [activeAdAccountId, setActiveAdAccountId] = useState<string>('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
   const { showToast } = useToast();
@@ -53,20 +54,24 @@ export const MetaAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
   const activePage = pages.find(p => p.id === activePageId) || pages[0] || null;
   const activeAdAccount = adAccounts.find(a => a.id === activeAdAccountId) || adAccounts[0] || null;
 
-  // Initial fetch from backend API
+  const refreshMetaAuth = async () => {
+    try {
+      const res = await fetch('/api/v2/auth/facebook');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setIsConnected(Boolean(json.data.isConnected));
+        setUser(json.data.user || null);
+        setPages(json.data.pages || []);
+        if (json.data.activePageId) setActivePageId(json.data.activePageId);
+        if (json.data.activeAdAccountId) setActiveAdAccountId(json.data.activeAdAccountId);
+      }
+    } catch {
+      setIsConnected(false);
+    }
+  };
+
   useEffect(() => {
-    fetch('/api/v2/auth/facebook')
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.data) {
-          setIsConnected(res.data.isConnected);
-          setUser(res.data.user);
-          setPages(res.data.pages);
-          if (res.data.activePageId) setActivePageId(res.data.activePageId);
-          if (res.data.activeAdAccountId) setActiveAdAccountId(res.data.activeAdAccountId);
-        }
-      })
-      .catch(() => {});
+    refreshMetaAuth();
   }, []);
 
   const selectPage = async (pageId: string) => {
@@ -105,24 +110,34 @@ export const MetaAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
-  const connectFacebook = async () => {
+  const connectFacebook = async (customToken?: string): Promise<boolean> => {
     setIsConnecting(true);
     try {
       const res = await fetch('/api/v2/auth/facebook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'connect' })
+        body: JSON.stringify({
+          action: 'connect_token',
+          accessToken: customToken
+        })
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.data) {
         setIsConnected(true);
         setUser(data.data.user);
-        setPages(data.data.pages);
+        setPages(data.data.pages || []);
+        if (data.data.activePageId) setActivePageId(data.data.activePageId);
+        if (data.data.activeAdAccountId) setActiveAdAccountId(data.data.activeAdAccountId);
         setShowConnectModal(false);
-        showToast('เชื่อมต่อบัญชี Facebook & เพจสำเร็จเรียบร้อย!', 'success');
+        showToast(data.message || 'เชื่อมต่อ Facebook และซิงค์เพจสำเร็จ!', 'success');
+        return true;
+      } else {
+        showToast(data.error || 'การเชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบ Access Token', 'error');
+        return false;
       }
-    } catch {
-      showToast('การเชื่อมต่อขัดข้อง กรุณาลองใหม่อีกครั้ง', 'error');
+    } catch (err: any) {
+      showToast(err.message || 'การเชื่อมต่อขัดข้อง กรุณาลองใหม่อีกครั้ง', 'error');
+      return false;
     } finally {
       setIsConnecting(false);
     }
@@ -137,7 +152,9 @@ export const MetaAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       });
       setIsConnected(false);
       setUser(null);
-      showToast('ยกเลิกการเชื่อมต่อบัญชี Meta แล้ว', 'info');
+      setPages([]);
+      setAdAccounts([]);
+      showToast('ยกเลิกการเชื่อมต่อบัญชี Meta เรียบร้อย', 'info');
     } catch {
       setIsConnected(false);
       setUser(null);
@@ -159,7 +176,8 @@ export const MetaAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
         selectPage,
         selectAdAccount,
         connectFacebook,
-        disconnectFacebook
+        disconnectFacebook,
+        refreshMetaAuth
       }}
     >
       {children}

@@ -1,11 +1,24 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Trophy, ArrowUpRight, TrendingUp, CheckCircle2 } from 'lucide-react';
-import { MOCK_CAMPAIGNS } from '@/data/mockData';
+import { Campaign } from '@/types';
 
 export default function AdSpotlightPage() {
-  const topCreatives = [...MOCK_CAMPAIGNS].sort((a, b) => b.roas - a.roas).slice(0, 3);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/v2/campaigns')
+      .then(res => res.json())
+      .then(res => {
+        if (res.data) setCampaigns(res.data);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const topCreatives = [...campaigns].sort((a, b) => b.roas - a.roas).slice(0, 3);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -43,23 +56,23 @@ export default function AdSpotlightPage() {
                 </div>
                 <div className="flex justify-between text-gray-400">
                   <span>Hook Rate (3s):</span>
-                  <span className="text-indigo-300 font-mono">{ad.hookRate}%</span>
+                  <span className="text-indigo-300 font-mono">{ad.hookRate || '-'}%</span>
                 </div>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-[#1a2336] text-[11px] text-gray-400 flex items-center justify-between">
-              <span>ดูแลโดย: Agent A16</span>
-              <button 
-                onClick={() => alert(`Agent A21 จะนำองค์ประกอบของ ${ad.name} ไปแตกเป็น 5 Hook ใหม่`)}
-                className="text-gold-400 font-semibold hover:underline flex items-center"
-              >
-                <span>แตกไอเดียเพิ่ม</span>
-                <ArrowUpRight className="w-3 h-3 ml-0.5" />
-              </button>
+            <div className="pt-3 border-t border-[#1d263b] flex items-center justify-between text-xs">
+              <span className="text-gray-400">Status: <strong className="text-emerald-400">{ad.status}</strong></span>
+              <span className="text-gold-400 font-medium">Agent A16 วิเคราะห์แล้ว</span>
             </div>
           </div>
         ))}
+
+        {topCreatives.length === 0 && !isLoading && (
+          <div className="col-span-3 p-12 rounded-2xl bg-[#0e131e] border border-[#1d263b] text-center text-gray-400">
+            ยังไม่มีแคมเปญในระบบ กรุณาเชื่อมต่อ Facebook หรือสร้างแคมเปญแรก
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,27 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Clock, AlertTriangle, CheckCircle, TrendingDown, RefreshCw, Sparkles } from 'lucide-react';
-import { MOCK_CAMPAIGNS } from '@/data/mockData';
+import { Campaign } from '@/types';
 
 export default function CreativeFatiguePage() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/v2/campaigns')
+      .then(res => res.json())
+      .then(res => {
+        if (res.data) setCampaigns(res.data);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const freshCount = campaigns.filter(c => c.fatigueStatus === 'fresh').length;
+  const warningCount = campaigns.filter(c => c.fatigueStatus === 'warning').length;
+  const saturatedCount = campaigns.filter(c => c.fatigueStatus === 'saturated').length;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
       <div>
@@ -24,8 +41,8 @@ export default function CreativeFatiguePage() {
             <CheckCircle className="w-4 h-4" />
             <span>โฆษณาสดใหม่ (Fresh Creatives)</span>
           </div>
-          <div className="text-2xl font-bold text-white mt-1">4 รายการ</div>
-          <div className="text-[11px] text-gray-400 mt-0.5">Frequency &lt; 2.0x • CTR ยังคงสูง</div>
+          <div className="text-2xl font-bold text-white mt-1">{freshCount} รายการ</div>
+          <div className="text-[11px] text-gray-400 mt-0.5">Frequency &lt; 2.2x • CTR ยังคงสูง</div>
         </div>
 
         <div className="p-4 rounded-xl bg-[#0f1420] border border-amber-500/30">
@@ -33,8 +50,8 @@ export default function CreativeFatiguePage() {
             <AlertTriangle className="w-4 h-4" />
             <span>เริ่มมีอาการล้า (Fatigue Warning)</span>
           </div>
-          <div className="text-2xl font-bold text-amber-400 mt-1">1 รายการ</div>
-          <div className="text-[11px] text-gray-400 mt-0.5">Frequency 2.0x - 3.0x • CTR เริ่มลดลง</div>
+          <div className="text-2xl font-bold text-amber-400 mt-1">{warningCount} รายการ</div>
+          <div className="text-[11px] text-gray-400 mt-0.5">Frequency 2.2x - 2.8x • CTR เริ่มลดลง</div>
         </div>
 
         <div className="p-4 rounded-xl bg-[#0f1420] border border-rose-500/40">
@@ -42,8 +59,8 @@ export default function CreativeFatiguePage() {
             <TrendingDown className="w-4 h-4" />
             <span>อิ่มตัว / เผางบ (Saturated / Burned)</span>
           </div>
-          <div className="text-2xl font-bold text-rose-400 mt-1">1 รายการ</div>
-          <div className="text-[11px] text-rose-300 mt-0.5">Frequency &gt; 3.5x • ควรเปลี่ยนภาพใหม่ทันที</div>
+          <div className="text-2xl font-bold text-rose-400 mt-1">{saturatedCount} รายการ</div>
+          <div className="text-[11px] text-rose-300 mt-0.5">Frequency &gt; 2.8x • ควรเปลี่ยนภาพใหม่ทันที</div>
         </div>
       </div>
 
@@ -60,37 +77,60 @@ export default function CreativeFatiguePage() {
               <tr className="border-b border-[#1f283d] bg-[#0c0f18] text-gray-400 text-[11px]">
                 <th className="py-3 px-4">ชื่อแคมเปญ</th>
                 <th className="py-3 px-3">ความถี่ (Frequency)</th>
-                <th className="py-3 px-3">CTR เฉลี่ย</th>
+                <th className="py-3 px-3">อัตราการคลิก (CTR)</th>
+                <th className="py-3 px-3">ยอดใช้จ่าย (Spend)</th>
                 <th className="py-3 px-3">ROAS</th>
                 <th className="py-3 px-3">สถานะความสดใหม่</th>
-                <th className="py-3 px-4">คำแนะนำของ Agent A05</th>
+                <th className="py-3 px-4 text-right">คำแนะนำจาก AI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#172033]">
-              {MOCK_CAMPAIGNS.map(c => (
-                <tr key={c.id} className="hover:bg-[#121826] transition-colors">
-                  <td className="py-3.5 px-4 font-medium text-white max-w-sm truncate">{c.name}</td>
-                  <td className="py-3.5 px-3 font-mono font-bold text-gray-200">{c.frequency}x</td>
-                  <td className="py-3.5 px-3 font-mono text-gray-300">{c.ctr}%</td>
-                  <td className="py-3.5 px-3 font-bold text-gold-400">{c.roas}x</td>
+              {campaigns.map(camp => (
+                <tr key={camp.id} className="hover:bg-[#121826] transition-colors">
+                  <td className="py-3.5 px-4">
+                    <div className="font-semibold text-white">{camp.name}</div>
+                    <div className="text-[10px] text-gray-500 font-mono mt-0.5">{camp.id}</div>
+                  </td>
+                  <td className="py-3.5 px-3 font-mono font-bold text-white">
+                    {camp.frequency}x
+                  </td>
+                  <td className="py-3.5 px-3 font-mono text-indigo-300">
+                    {camp.ctr}%
+                  </td>
+                  <td className="py-3.5 px-3 font-mono text-gray-300">
+                    ฿{camp.spend.toLocaleString()}
+                  </td>
+                  <td className="py-3.5 px-3 font-mono font-bold text-gold-400">
+                    {camp.roas}x
+                  </td>
                   <td className="py-3.5 px-3">
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                      c.fatigueStatus === 'fresh' 
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                        : c.fatigueStatus === 'warning'
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                      camp.fatigueStatus === 'fresh'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : camp.fatigueStatus === 'warning'
                         ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                     }`}>
-                      {c.fatigueStatus.toUpperCase()}
+                      {camp.fatigueStatus}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 text-xs text-gray-300">
-                    {c.fatigueStatus === 'fresh' && 'ประสิทธิภาพยอดเยี่ยม ปล่อยให้ระบบ AI รันต่อเนื่อง'}
-                    {c.fatigueStatus === 'warning' && 'เริ่มมีคนเห็นซ้ำบ่อย แนะนำเตรียมภาพสำรองหรือขยาย Interest'}
-                    {c.fatigueStatus === 'saturated' && 'คนเห็นซ้ำ 3.8x แล้ว! แนะนำให้หยุดแล้วขึ้น Creative ชุดใหม่ทันที'}
+                  <td className="py-3.5 px-4 text-right">
+                    <span className="text-[11px] text-gray-300">
+                      {camp.fatigueStatus === 'fresh' && 'ประสิทธิภาพดีเยี่ยม วิ่งแอดได้ต่อเนื่อง'}
+                      {camp.fatigueStatus === 'warning' && 'เริ่มวนซ้ำ เตรียมภาพสำรอง'}
+                      {camp.fatigueStatus === 'saturated' && 'กลุ่มเป้าหมายเห็นซ้ำเกินไป ควรเปลี่ยนมุมมอง'}
+                    </span>
                   </td>
                 </tr>
               ))}
+
+              {campaigns.length === 0 && !isLoading && (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                    ยังไม่มีแคมเปญที่เชื่อมต่อ กรุณาเชื่อมต่อ Meta หรือซิงค์แคมเปญจริง
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

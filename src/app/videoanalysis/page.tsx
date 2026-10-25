@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Video, Sparkles, TrendingUp, AlertCircle, Play, CheckCircle2, Calculator, Plus } from 'lucide-react';
-import { MOCK_CAMPAIGNS } from '@/data/mockData';
+import { Campaign } from '@/types';
 import { useToast } from '@/components/ui/Toast';
 
 export default function VideoAnalysisPage() {
   const { showToast } = useToast();
-  const [videoList, setVideoList] = useState(MOCK_CAMPAIGNS.filter(c => c.hookRate));
+  const [videoList, setVideoList] = useState<Campaign[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Interactive Calculator State
   const [calcImpressions, setCalcImpressions] = useState(10000);
@@ -17,31 +18,41 @@ export default function VideoAnalysisPage() {
   const calculatedHookRate = calcImpressions > 0 ? Number(((calcHookViews / calcImpressions) * 100).toFixed(1)) : 0;
   const calculatedHoldRate = calcHookViews > 0 ? Number(((calcHoldViews / calcHookViews) * 100).toFixed(1)) : 0;
 
-  const handleAddVideo = () => {
+  useEffect(() => {
+    fetch('/api/v2/campaigns')
+      .then(res => res.json())
+      .then(res => {
+        if (res.data) {
+          const videos = res.data.filter((c: Campaign) => (c.hookRate && c.hookRate > 0) || c.format?.includes('Reel') || c.format?.includes('Video'));
+          setVideoList(videos.length > 0 ? videos : res.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const handleAddVideo = async () => {
     const newVideo = {
-      id: `camp-${Date.now()}`,
       name: `[NEW REEL] ทดสอบวิดีโอตัวใหม่ (Hook Rate ${calculatedHookRate}%)`,
-      status: 'ACTIVE' as const,
-      objective: 'OUTCOME_SALES' as const,
+      objective: 'OUTCOME_SALES',
       dailyBudget: 2500,
-      spend: 1500,
-      roas: 4.2,
-      purchases: 18,
-      costPerPurchase: 83.3,
-      cpc: 3.1,
-      ctr: 3.8,
-      impressions: calcImpressions,
-      frequency: 1.1,
-      fatigueStatus: 'fresh' as const,
-      hookRate: calculatedHookRate,
-      holdRate: calculatedHoldRate,
-      format: 'Reels 9:16',
-      adSetsCount: 1,
-      adsCount: 1,
-      updatedAt: 'Just now'
+      format: 'Reels 9:16'
     };
-    setVideoList(prev => [newVideo, ...prev]);
-    showToast('เพิ่มวิดีโอใหม่เข้าสู่รายการวิเคราะห์แล้ว!', 'success');
+
+    try {
+      const res = await fetch('/api/v2/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_campaign', newCampaign: newVideo })
+      });
+      const data = await res.json();
+      if (data.success && data.createdCampaign) {
+        setVideoList(prev => [data.createdCampaign, ...prev]);
+        showToast('บันทึกแคมเปญวิดีโอใหม่เข้าสู่ระบบเรียบร้อย!', 'success');
+      }
+    } catch {
+      showToast('การเพิ่มแคมเปญขัดข้อง', 'error');
+    }
   };
 
   return (
@@ -78,140 +89,134 @@ export default function VideoAnalysisPage() {
       {/* Interactive Hook Rate & Hold Rate Calculator */}
       <div className="p-6 rounded-2xl bg-[#0e131e] border border-gold-500/30 space-y-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-white flex items-center space-x-2">
-              <Calculator className="w-5 h-5 text-gold-400" />
-              <span>เครื่องมือคำนวณ Hook Rate & Hold Rate แบบสด (Interactive Calculator)</span>
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              ใส่ยอด Impressions และจำนวนคนดูเพื่อคำนวณอัตราความสำเร็จและรับคำแนะนำปรับปรุงสคริปต์
-            </p>
+          <div className="flex items-center space-x-2">
+            <Calculator className="w-5 h-5 text-gold-400" />
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">เครื่องคำนวณและจำลอง Hook Rate แบบอินเตอร์แอคทีฟ</h2>
           </div>
+          <span className="text-[11px] px-2 py-0.5 rounded bg-gold-500/10 text-gold-300 font-mono">Live Formula Simulation</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-          <div>
-            <label className="text-xs font-semibold text-gray-300 block mb-1">ยอดการมองเห็น (Impressions)</label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="space-y-1.5">
+            <label className="text-gray-300">จำนวนการแสดงผล (Impressions)</label>
             <input
               type="number"
               value={calcImpressions}
               onChange={(e) => setCalcImpressions(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded-lg bg-[#141a29] border border-[#232d44] text-xs text-white focus:outline-none focus:border-gold-500"
+              className="w-full px-3 py-2 rounded-lg bg-[#141a29] border border-[#232d44] text-white font-mono focus:border-gold-500"
             />
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-300 block mb-1">ยอดคนดูถึง 3 วินาที (3s Video Views)</label>
+          <div className="space-y-1.5">
+            <label className="text-gray-300">คนดูคลิปเกิน 3 วินาที (3s Video Plays)</label>
             <input
               type="number"
               value={calcHookViews}
               onChange={(e) => setCalcHookViews(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded-lg bg-[#141a29] border border-[#232d44] text-xs text-gold-300 font-bold focus:outline-none focus:border-gold-500"
+              className="w-full px-3 py-2 rounded-lg bg-[#141a29] border border-[#232d44] text-white font-mono focus:border-gold-500"
             />
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-300 block mb-1">ยอดคนดูถึง 15 วินาที (15s Video Views)</label>
+          <div className="space-y-1.5">
+            <label className="text-gray-300">คนดูคลิปเกิน 15 วินาที (15s ThruPlays)</label>
             <input
               type="number"
               value={calcHoldViews}
               onChange={(e) => setCalcHoldViews(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded-lg bg-[#141a29] border border-[#232d44] text-xs text-indigo-300 font-bold focus:outline-none focus:border-gold-500"
+              className="w-full px-3 py-2 rounded-lg bg-[#141a29] border border-[#232d44] text-white font-mono focus:border-gold-500"
             />
           </div>
         </div>
 
-        {/* Calculated Result Card */}
-        <div className="p-4 rounded-xl bg-[#141a29] border border-[#232d44] flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center space-x-6">
+        {/* Calculated Result Display */}
+        <div className="p-4 rounded-xl bg-[#141926] border border-[#212b40] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-6 text-xs">
             <div>
-              <span className="text-[10px] text-gray-400 block font-medium">3-Second Hook Rate</span>
-              <span className="text-2xl font-extrabold text-gold-400 font-mono">{calculatedHookRate}%</span>
+              <span className="text-gray-400 block">3-Second Hook Rate:</span>
+              <strong className="text-xl font-bold text-gold-400 font-mono">{calculatedHookRate}%</strong>
             </div>
-            <div className="h-8 w-px bg-gray-700" />
             <div>
-              <span className="text-[10px] text-gray-400 block font-medium">15-Second Hold Rate</span>
-              <span className="text-2xl font-extrabold text-indigo-300 font-mono">{calculatedHoldRate}%</span>
+              <span className="text-gray-400 block">15-Second Hold Rate:</span>
+              <strong className="text-xl font-bold text-indigo-300 font-mono">{calculatedHoldRate}%</strong>
             </div>
-            <div className="h-8 w-px bg-gray-700" />
             <div>
-              <span className="text-[10px] text-gray-400 block font-medium">เกรดคุณภาพ (Grade)</span>
-              <span className={`text-sm font-bold ${calculatedHookRate >= 40 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {calculatedHookRate >= 40 ? 'Top 10% ไวรัลวินเนอร์' : 'ปานกลาง (ควรปรับ Hook)'}
+              <span className="text-gray-400 block">การประเมินจากระบบ:</span>
+              <span className={`text-xs font-bold ${calculatedHookRate >= 35 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {calculatedHookRate >= 35 ? '✅ ผ่านเกณฑ์ไวรัลระดับสูง' : '⚠️ ควรปรับปรุง 3 วินาทีแรก'}
               </span>
             </div>
           </div>
 
           <button
             onClick={handleAddVideo}
-            className="px-4 py-2 rounded-xl bg-gold-500 hover:bg-gold-400 text-black font-bold text-xs flex items-center space-x-1.5 cursor-pointer shadow-md shrink-0"
+            className="px-4 py-2 rounded-xl bg-gold-500 hover:bg-gold-400 text-black font-bold text-xs flex items-center space-x-1.5 transition-all shadow-md cursor-pointer self-start sm:self-auto"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>บันทึกเข้าสู่ตารางติดตาม</span>
+            <Plus className="w-4 h-4" />
+            <span>สร้างแคมเปญด้วยสถิตินี้</span>
           </button>
         </div>
       </div>
 
-      {/* Video Performance Cards */}
-      <div className="space-y-4">
-        <h2 className="text-sm font-bold text-white">รายการวิดีโอที่กำลังมอนิเตอร์ ({videoList.length} วิดีโอ)</h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {videoList.map(vc => (
-            <div key={vc.id} className="p-5 rounded-2xl bg-[#0e131e] border border-[#1d263b] space-y-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-white max-w-sm truncate">{vc.name}</h3>
-                  <div className="text-[10px] text-gray-500 mt-0.5">ROAS {vc.roas}x • {vc.impressions.toLocaleString()} วิว</div>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-gold-500/10 text-gold-400 border border-gold-500/30">
-                  {vc.format || 'Reels 9:16'}
-                </span>
-              </div>
-
-              {/* Hook & Hold Bars */}
-              <div className="space-y-3 p-3 rounded-xl bg-[#141a29]">
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-300 font-medium">3-Second Hook Rate (อัตราหยุดดู 3 วิ)</span>
-                    <span className="font-bold text-gold-400 font-mono">{vc.hookRate}%</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-gray-800 overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-amber-400 to-yellow-500 rounded-full" 
-                      style={{ width: `${Math.min(vc.hookRate || 0, 100)}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-300 font-medium">15-Second Hold Rate (อัตราดูต่อจนถึง 15 วิ)</span>
-                    <span className="font-bold text-indigo-300 font-mono">{vc.holdRate}%</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-gray-800 overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" 
-                      style={{ width: `${Math.min((vc.holdRate || 0) * 2, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* AI Insight */}
-              <div className="text-xs text-gray-300 flex items-start space-x-2 pt-1">
-                <Sparkles className="w-4 h-4 text-gold-400 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  {(vc.hookRate || 0) > 45 ? (
-                    <span><strong>วินเนอร์คอนเทนต์:</strong> 3 วิแรกดึงดูดสายตาดีเยี่ยม ควรนำไปตัดต่อ Hook เปิดหัวสำรองอีก 3 แบบเพื่อขยายผล</span>
-                  ) : (
-                    <span><strong>จุดควรปรับปรุง:</strong> คนเลื่อนผ่านใน 3 วิแรก แนะนำให้ใส่ข้อความพาดหัวตัวใหญ่และซูมภาพสินค้าเร็วขึ้น 1.5 เท่า</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* Video Campaigns Table */}
+      <div className="rounded-2xl bg-[#0e131e] border border-[#1d263b] overflow-hidden">
+        <div className="p-4 border-b border-[#1c2438] flex items-center justify-between">
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+            รายการแคมเปญวิดีโอที่กำลังวิเคราะห์ ({videoList.length})
+          </h2>
+          <span className="text-[11px] text-gray-400">อัปเดตจาก Meta Graph API</span>
         </div>
+
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-[#1f283d] bg-[#0c0f18] text-gray-400 text-[11px]">
+              <th className="py-3 px-4">ชื่อวิดีโอแอด / รูปแบบ</th>
+              <th className="py-3 px-3">ยอดวิว (Impressions)</th>
+              <th className="py-3 px-3">3s Hook Rate</th>
+              <th className="py-3 px-3">15s Hold Rate</th>
+              <th className="py-3 px-3">ROAS</th>
+              <th className="py-3 px-4 text-right">คำแนะนำปรับปรุง Hook</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#172033]">
+            {videoList.map(camp => (
+              <tr key={camp.id} className="hover:bg-[#121826] transition-colors">
+                <td className="py-3.5 px-4">
+                  <div className="font-semibold text-white">{camp.name}</div>
+                  <div className="text-[10px] text-gray-400 font-mono mt-0.5">{camp.format || 'Reels 9:16'} • {camp.id}</div>
+                </td>
+                <td className="py-3.5 px-3 font-mono text-gray-300">
+                  {camp.impressions?.toLocaleString() || '-'}
+                </td>
+                <td className="py-3.5 px-3 font-mono font-bold text-gold-400">
+                  {camp.hookRate ? `${camp.hookRate}%` : '-'}
+                </td>
+                <td className="py-3.5 px-3 font-mono text-indigo-300">
+                  {camp.holdRate ? `${camp.holdRate}%` : '-'}
+                </td>
+                <td className="py-3.5 px-3 font-mono text-emerald-400 font-bold">
+                  {camp.roas}x
+                </td>
+                <td className="py-3.5 px-4 text-right">
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                    (camp.hookRate || 0) >= 35 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  }`}>
+                    {(camp.hookRate || 0) >= 35 ? 'Hook ทรงพลัง ขยายงบได้' : 'ควรเปลี่ยน 3 วินาทีแรก'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+
+            {videoList.length === 0 && !isLoading && (
+              <tr>
+                <td colSpan={6} className="py-12 text-center text-gray-400">
+                  ยังไม่พบแคมเปญวิดีโอบนบัญชีนี้ สามารถใช้เครื่องคำนวณด้านบนเพื่อจำลองอัตรา Hook Rate ได้ทันที
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

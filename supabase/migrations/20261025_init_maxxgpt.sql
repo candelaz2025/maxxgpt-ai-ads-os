@@ -1,6 +1,7 @@
 -- =================================================================
--- MaxxGPT AI Ads Operating System - Initial Database Schema
+-- MaxxGPT AI Ads Operating System - Complete Database Schema
 -- Compatible with PostgreSQL 15+ / Supabase
+-- Supports both standard and alias table names for 100% interoperability
 -- =================================================================
 
 -- 1. Profiles Table (Users & Credit Balance)
@@ -11,7 +12,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   email TEXT UNIQUE NOT NULL,
   avatar_url TEXT,
   plan_tier TEXT DEFAULT 'PRO',
-  credits_balance INT DEFAULT 4850,
+  credits_balance INT DEFAULT 5000,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS meta_accounts (
   currency TEXT DEFAULT 'THB',
   timezone TEXT DEFAULT 'Asia/Bangkok',
   balance NUMERIC DEFAULT 0,
-  spend_cap NUMERIC DEFAULT 150000,
+  spend_cap NUMERIC DEFAULT 0,
   amount_spent NUMERIC DEFAULT 0,
   status TEXT DEFAULT 'ACTIVE',
   encrypted_access_token TEXT,
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS meta_accounts (
 
 -- 3. Meta Connected Facebook Pages
 CREATE TABLE IF NOT EXISTS meta_pages (
-  id TEXT PRIMARY KEY, -- e.g. page_beauty_01
+  id TEXT PRIMARY KEY, -- Facebook Page ID e.g. 1029384756
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   category TEXT,
@@ -50,13 +51,13 @@ CREATE TABLE IF NOT EXISTS meta_pages (
 
 -- 4. Meta Campaigns
 CREATE TABLE IF NOT EXISTS campaigns (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY, -- Meta Campaign ID e.g. 23851029384
   page_id TEXT REFERENCES meta_pages(id) ON DELETE SET NULL,
   account_id TEXT REFERENCES meta_accounts(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   status TEXT DEFAULT 'ACTIVE',
   objective TEXT DEFAULT 'OUTCOME_SALES',
-  daily_budget NUMERIC DEFAULT 2500,
+  daily_budget NUMERIC DEFAULT 0,
   spend NUMERIC DEFAULT 0,
   roas NUMERIC DEFAULT 0,
   purchases INT DEFAULT 0,
@@ -96,20 +97,20 @@ CREATE TABLE IF NOT EXISTS rule_proposals (
   campaign_id TEXT REFERENCES campaigns(id) ON DELETE CASCADE,
   recommended_action TEXT NOT NULL,
   reason TEXT NOT NULL,
-  spend_at_trigger NUMERIC,
-  roas_at_trigger NUMERIC,
-  purchases_at_trigger INT,
+  spend_at_trigger NUMERIC DEFAULT 0,
+  roas_at_trigger NUMERIC DEFAULT 0,
+  purchases_at_trigger INT DEFAULT 0,
   status TEXT DEFAULT 'pending_confirmation', -- 'pending_confirmation', 'approved', 'rejected'
   proposed_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. Message Tier Leads (Inbox Bot)
+-- 7. Message Tier Leads (Messenger / Instagram Direct Leads)
 CREATE TABLE IF NOT EXISTS leads (
   id TEXT PRIMARY KEY,
   page_id TEXT REFERENCES meta_pages(id) ON DELETE CASCADE,
   customer_name TEXT NOT NULL,
-  tier TEXT DEFAULT 'Tier S', -- 'Tier S', 'Tier A', 'Tier B', 'Tier C', 'Spam / Ghost'
-  purchase_probability INT DEFAULT 80,
+  tier TEXT DEFAULT 'Tier A', -- 'Tier S', 'Tier A', 'Tier B', 'Tier C', 'Spam / Ghost'
+  purchase_probability INT DEFAULT 70,
   inquiry_product TEXT,
   summary TEXT,
   status TEXT DEFAULT 'pending_reply', -- 'pending_reply', 'replied', 'converted', 'dropped'
@@ -142,9 +143,41 @@ CREATE TABLE IF NOT EXISTS swarm_messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for performance
+-- =================================================================
+-- Views for Compatibility with Alternative Table Names
+-- =================================================================
+CREATE OR REPLACE VIEW facebook_pages AS SELECT * FROM meta_pages;
+CREATE OR REPLACE VIEW automation_rules AS SELECT * FROM rules;
+CREATE OR REPLACE VIEW pending_proposals AS SELECT * FROM rule_proposals;
+CREATE OR REPLACE VIEW message_leads AS SELECT * FROM leads;
+CREATE OR REPLACE VIEW agent_telemetry AS SELECT * FROM swarm_agents;
+
+-- Indexes for lightning-fast queries
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_campaigns_roas ON campaigns(roas);
 CREATE INDEX IF NOT EXISTS idx_leads_tier ON leads(tier);
 CREATE INDEX IF NOT EXISTS idx_leads_page ON leads(page_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_status ON rule_proposals(status);
+CREATE INDEX IF NOT EXISTS idx_agents_division ON swarm_agents(division);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE meta_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE meta_pages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rule_proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE swarm_agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE swarm_messages ENABLE ROW LEVEL SECURITY;
+
+-- Allow public read/write for MaxxGPT operational service
+CREATE POLICY "Public full access for profiles" ON profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for meta_accounts" ON meta_accounts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for meta_pages" ON meta_pages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for campaigns" ON campaigns FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for rules" ON rules FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for rule_proposals" ON rule_proposals FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for leads" ON leads FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for swarm_agents" ON swarm_agents FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access for swarm_messages" ON swarm_messages FOR ALL USING (true) WITH CHECK (true);
